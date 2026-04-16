@@ -66,7 +66,7 @@ function PositionSlot({ pos, pid, name, isKeeper, isLockedKeeper, isIncoming, is
       {...attributes}
       {...listeners}
       onClick={() => canInteract && onCellClick(pos)}
-      className={`absolute flex flex-col items-center gap-0.5 ${canInteract ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex flex-col items-center gap-0.5 ${canInteract ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${isDragging ? 'opacity-40' : ''}`}
       style={{ touchAction: 'none' }}>
       <div className={`rounded-full shadow-sm w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center text-xs font-bold transition-all ${bgCls} ${ringCls}`}>
         {pid ? initials(name) : '+'}

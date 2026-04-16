@@ -1,48 +1,94 @@
-# Byttehjelp — Gjenstående TODO
+# Byttehjelp — Prioritert plan
 
 Sist oppdatert: 2026-04-16
 
-## Kort sikt (neste økt)
+## Kort sikt (denne + neste okt)
 
-- [ ] **Fotball.no iCal-import** — iCal-endepunkt funnet (`/footballapi/Calendar/GetCalendar?tournamentId={fiksId}`). Implementer manuell .ics fil-upload → parser VEVENT → opprett Match-objekter. CORS blokkerer direkte fetch; manuell fil er MVP.
-- [ ] **Verifiser PDF-fargekoder** — Fix pushet (print-color-adjust: exact), trenger brukertest.
-- [ ] **Feilhåndtering** — localStorage kan feile stille. Legg til: kvote-varsling, error boundary rundt AppProvider, fallback-melding ved korrupt data.
+### 1. Deploy til Vercel for brukertesting
+- [ ] Push siste endringer til GitHub
+- [ ] `npx vercel` — koble repo, deploy
+- [ ] Verifiser PWA-install pa mobil via Vercel-URL
+- [ ] Del URL med 2-3 trenere for feedback
 
-## Middels sikt
+### 2. Responsivt mobil-layout
+- [ ] Sidebar kollapser til hamburger-meny under 768px
+- [ ] PlannerScreen: perioder og tabell scroller horisontalt pa mobil
+- [ ] MatchTimerScreen: allerede OK, verifiser med ekte telefon
 
-- [ ] **Multi-lag-støtte** — Fjern `state.teams[0]`-hardkoding. Legg til lagbytte i sidebar.
-- [ ] **Undo/redo i planlegger** — Ingen måte å angre feilaktige tilordninger i draft.
-- [ ] **Responsivt mobil-layout** — Sidebar 224px fast. Kollapser til hamburger-meny under 640px.
-- [ ] **Toast-varsler** — Bekreftelse ved draft-kopiering, sletting, navnendring.
-- [ ] **Halvtids-overgangs-UI** — Visuell overgang mellom 1. og 2. omgang i kamp-timer.
-- [ ] **Keyboard-tilgjengelighet** — dnd-kit KeyboardSensor, ARIA-labels, semantisk HTML.
-- [ ] **fotball.no proxy** — Vercel Edge Function / Cloudflare Worker for direkte iCal-fetch uten manuell fil.
+### 3. Feilhandtering og dataintegritet
+- [ ] Error boundary rundt AppProvider — vis "Noe gikk galt" ved krasj
+- [ ] localStorage kvote-sjekk for lagring (warn ved >4MB)
+- [ ] Eksport/import JSON-backup av all data (Innstillinger-side)
+- [ ] Validering ved lasting: rydd opp korrupt data stille
 
-## Lang sikt (native app + backend)
+### 4. UX-polish fra brukertesting
+- [ ] Verifiser PDF-fargekoder (print-color-adjust) med faktisk utskrift
+- [ ] Toast-varsler ved draft-kopiering, sletting, lagring
+- [ ] Inline bekreftelsesdialoger (erstatt window.confirm)
+- [ ] Keyboard Enter-support i alle tekstfelt
 
-- [ ] **Cloud-sync** — Supabase/Firebase for backup, multi-enhet, multi-trener.
-- [ ] **iOS native app** — Swift, Live Activities / Dynamic Island for sanntids bytteinfo.
-- [ ] **Sesong-analyse** — Spilletids-rettferdighet over hele sesongen. Heatmaps.
-- [ ] **Foreldre-portal** — QR-kode → read-only kampvisning med barnets spilletid live.
-- [ ] **Smart forslag** — Foreslå startoppstilling basert på historikk. Identifiser ujevn fordeling.
-- [ ] **Spillerpar-analyse** — Hvem fungerer godt sammen i posisjon.
+## Middels sikt (2-4 uker)
 
-## Sikkerhet/compliance
+### 5. Backend-fundament (Supabase)
+- [ ] Opprett Supabase-prosjekt med tabeller: teams, players, matches, drafts
+- [ ] Row Level Security: hver trener ser kun egne data
+- [ ] Auth: Magic link (e-post) — ingen passord
+- [ ] Sync-strategi: localStorage = offline-cache, Supabase = master
+  - Ved online: push lokale endringer, pull siste
+  - Ved offline: jobb lokalt, sync nar tilbake
+  - Konfliktlosning: siste endring vinner (per-felt)
+- [ ] Migrer AppContext til dual-write (localStorage + Supabase)
 
-- [ ] **Krypter spillerdata** i localStorage (barns navn).
-- [ ] **GDPR-samtykke** — Informer om datalagringstype, gi mulighet for sletting.
-- [ ] **Eksport/slett all data** — Bruker kan laste ned alt som JSON og slette lokalt.
+### 6. Multi-lag-stotte
+- [ ] Fjern `state.teams[0]` hardkoding i AppShell.tsx
+- [ ] Lagbytte-dropdown i sidebar
+- [ ] Kamper filtreres per valgt lag
 
-## Design-polish (kan gjøres når som helst)
+### 7. Undo/redo i planlegger
+- [ ] Undostack per draft (maks 20 steg)
+- [ ] Cmd+Z / Ctrl+Z keyboard shortcut
+- [ ] Angre-knapp i toolbar
 
-- [ ] Fjern PlanningView.tsx referanser fra MatchList.tsx (allerede slettet, verifiser import-rester)
-- [ ] Konsolider fargekoding: noen steder bruker inline hex, andre CSS-variabler
-- [ ] Splitt PlannerScreen.tsx (700+ linjer) i mindre moduler
-- [ ] Splitt MatchesScreen.tsx (430+ linjer)
+### 8. fotball.no kalender-import
+- [ ] .ics fil-upload → parse VEVENT → opprett kamper
+- [ ] Senere: Vercel Edge Function proxy for direkte fetch
 
-## Lessons learned
+## Teknisk gjeld (gar parallelt)
 
-- `window.prompt` er blokkert i mange nettlesere — bruk alltid inline-dialog.
-- Mobil Safari: `autoFocus` kan skjule knapper bak tastatur — bruk `enterKeyHint` + `<form>` submit.
-- Forward-propagation (byttetilordning → neste perioder) gir intuitiv UX men krever "preserve manual override"-logikk.
-- `print-color-adjust: exact` er nødvendig for at bakgrunnsfarger vises i PDF.
+### 9. Splitt store filer
+- [ ] PlannerScreen.tsx (703 linjer) → PlannerToolbar, PlannerSettings, DraftManager
+- [ ] MatchesScreen.tsx (436 linjer) → MatchList, MatchCreateDialog, MatchCard
+- [ ] Maks ~200 linjer per komponent
+
+### 10. CSS-konsolidering
+- [ ] Erstatt alle inline hex (`bg-[#D9EAD3]`) med CSS-variabler (`bg-sub-in`)
+- [ ] Sikre at alle farger bruker theme-tokens fra index.css
+
+### 11. Testing
+- [ ] Vitest + React Testing Library for utils (substitution, plan, pitch)
+- [ ] Komponenttester for PlayerPicker, PeriodTable
+- [ ] E2E: Playwright for kritisk flyt (opprett lag → planlegg → start kamp)
+
+### 12. TypeScript-strenghet
+- [ ] Fjern alle `as` type assertions der mulig
+- [ ] Strikt null-sjekker i handleAssignPlayer
+
+## Avhengighetsrekkefolge
+
+```
+1. Deploy (avblokkerer brukertesting)
+   |
+   v
+2. Responsivt layout (avblokkerer mobiltesting)
+   |
+   v
+3. Feilhandtering + 4. UX-polish (feedback-drevet)
+   |
+   v
+5. Supabase backend (avblokkerer multi-enhet + deling)
+   |
+   v
+6. Multi-lag + 7. Undo (avhenger av backend for sync)
+```
+
+Teknisk gjeld (9-12) kjores parallelt uavhengig av feature-arbeid.

@@ -71,7 +71,7 @@ export function PlannerScreen({ matchId, onStartMatch, onGoToMatches }: Props) {
 
   const [activeHalf, setActiveHalf] = useState<0 | 1>(0);
   const [activePeriodIdx, setActivePeriodIdx] = useState(0);
-  const [view, setView] = useState<'pitch' | 'table'>('pitch');
+  const [view, setView] = useState<'pitch' | 'table'>('table');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
