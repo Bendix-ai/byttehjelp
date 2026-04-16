@@ -130,7 +130,7 @@ export function OnboardingScreen({ step, onContinue, onGoToSection }: Props) {
 
   if (step === 'team') {
     return (
-      <div className="max-w-2xl mx-auto p-8">
+      <div className="max-w-2xl mx-auto p-4 md:p-8">
         <div className="mb-6">
           <div className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
             Steg 1 av 4
@@ -274,7 +274,7 @@ export function OnboardingScreen({ step, onContinue, onGoToSection }: Props) {
   // step === 'players'
   if (!team || !formation) {
     return (
-      <div className="max-w-2xl mx-auto p-8">
+      <div className="max-w-2xl mx-auto p-4 md:p-8">
         <p className="text-gray-500">Opprett laget først.</p>
         <button onClick={() => onGoToSection('opprett')} className="text-[var(--color-primary)] text-sm mt-2">
           ← Til Opprett lag
@@ -289,7 +289,7 @@ export function OnboardingScreen({ step, onContinue, onGoToSection }: Props) {
   const sorted = [...team.players].sort((a, b) => a.name.localeCompare(b.name, 'nb'));
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="max-w-5xl mx-auto p-4 md:p-8">
       <div className="mb-6">
         <div className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
           Steg 2 av 4 — {team.name} · {team.format}

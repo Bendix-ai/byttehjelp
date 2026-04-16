@@ -88,7 +88,7 @@ export function AppShell() {
         teamName={team?.name}
         onSelect={setSection}
       />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto pt-12 md:pt-0">
         {content}
       </main>
     </div>

@@ -44,7 +44,7 @@ export function MatchesScreen({ activeMatchId, onSelectMatch, onCreateMatch }: P
 
   if (!team) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <p className="text-gray-500">Opprett et lag først.</p>
       </div>
     );
@@ -295,7 +295,7 @@ export function MatchesScreen({ activeMatchId, onSelectMatch, onCreateMatch }: P
   const MONTH_NAMES = ['Januar', 'Februar', 'Mars', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Desember'];
 
   return (
-    <div className="max-w-4xl mx-auto p-8">
+    <div className="max-w-4xl mx-auto p-4 md:p-8">
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <div className="text-xs uppercase tracking-wider text-gray-500 font-semibold">
