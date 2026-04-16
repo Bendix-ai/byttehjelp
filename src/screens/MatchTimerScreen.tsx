@@ -11,6 +11,7 @@ interface Props {
 export function MatchTimerScreen({ matchId, onBack }: Props) {
   const { state, dispatch } = useAppState();
   const match = matchId ? state.matches.find(m => m.id === matchId) : null;
+  const plan = match ? (match.livePlan ?? match.drafts.find(d => d.id === match.activeDraftId) ?? match.drafts[0]) : null;
 
   const [timer, setTimer] = useState<TimerState>({
     halfIndex: 0,
@@ -21,6 +22,7 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
   });
   const [elapsedMs, setElapsedMs] = useState(0);
   const [alertShown, setAlertShown] = useState<Set<string>>(new Set());
+  const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef(timer) as MutableRefObject<TimerState>;
@@ -62,11 +64,11 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
 
     const intervalId = setInterval(() => {
       const now = Date.now();
-      setElapsedMs(timer.elapsedBeforePause + (now - timer.startedAt!));
+      setElapsedMs(timer.elapsedBeforePause + (now - timer.startedAt!) * speedMultiplier);
     }, 250);
 
     return () => clearInterval(intervalId);
-  }, [timer.isRunning, timer.startedAt, timer.elapsedBeforePause]);
+  }, [timer.isRunning, timer.startedAt, timer.elapsedBeforePause, speedMultiplier]);
 
   // Check substitution boundaries
   const triggerAlert = useCallback(() => {
@@ -84,8 +86,8 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!match || !timer.isRunning) return;
-    const half = match.halves[timer.halfIndex];
+    if (!match || !plan || !timer.isRunning) return;
+    const half = plan.halves[timer.halfIndex];
     const elapsedMin = elapsedMs / 60000;
 
     for (let i = 1; i < half.periods.length; i++) {
@@ -104,14 +106,14 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
     const handler = () => {
       const t = timerRef.current;
       if (document.visibilityState === 'visible' && t.isRunning && t.startedAt) {
-        setElapsedMs(t.elapsedBeforePause + (Date.now() - t.startedAt));
+        setElapsedMs(t.elapsedBeforePause + (Date.now() - t.startedAt) * speedMultiplier);
       }
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, []);
+  }, [speedMultiplier]);
 
-  if (!match || !team) {
+  if (!match || !team || !plan) {
     return (
       <div className="p-4">
         <button onClick={onBack} className="text-primary text-lg mb-4">&larr; Tilbake</button>
@@ -120,7 +122,7 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
     );
   }
 
-  const half = match.halves[timer.halfIndex];
+  const half = plan.halves[timer.halfIndex];
   const currentPeriod = half.periods[timer.periodIndex];
   const halfDuration = half.durationMinutes;
   const remainingMs = Math.max(0, (halfDuration * 60000) - elapsedMs);
@@ -129,16 +131,37 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
 
   // Next substitution time
   const nextPeriodIdx = timer.periodIndex + 1;
-  const nextSubTime = nextPeriodIdx < half.periods.length
-    ? half.periods[nextPeriodIdx].startMinute
-    : null;
+  const nextPeriod = nextPeriodIdx < half.periods.length ? half.periods[nextPeriodIdx] : null;
+  const nextSubTime = nextPeriod ? nextPeriod.startMinute : null;
   const timeToNextSub = nextSubTime !== null
     ? Math.max(0, (nextSubTime * 60000) - elapsedMs)
     : null;
+  const nextSubMin = timeToNextSub !== null ? Math.floor(timeToNextSub / 60000) : null;
+  const nextSubSec = timeToNextSub !== null ? Math.floor((timeToNextSub % 60000) / 1000) : null;
+  const isSubImminent = timeToNextSub !== null && timeToNextSub <= 60000 && timeToNextSub > 0;
 
   // Sub diff for current period
   const prevPeriod = timer.periodIndex > 0 ? half.periods[timer.periodIndex - 1] : null;
   const diff = prevPeriod ? getSubstitutionDiff(prevPeriod.positions, currentPeriod.positions) : null;
+
+  // Per-position upcoming changes from current → next period.
+  // If the outgoing player was just subbed IN this period (came from bench), filter it out —
+  // we don't want to flag a fresh player as already going out in the next panel.
+  const upcomingChanges = nextPeriod
+    ? Object.keys(currentPeriod.positions)
+        .filter(pos => currentPeriod.positions[pos] !== nextPeriod.positions[pos])
+        .filter(pos => {
+          const outgoing = currentPeriod.positions[pos];
+          if (!outgoing) return true;
+          if (!diff) return true;
+          return !diff.comingIn.has(outgoing);
+        })
+        .map(pos => ({
+          position: pos,
+          outgoing: currentPeriod.positions[pos],
+          incoming: nextPeriod.positions[pos],
+        }))
+    : [];
 
   function handleStart() {
     setTimer(prev => ({
@@ -147,15 +170,19 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
       startedAt: Date.now(),
     }));
 
-    // Mark match as live
+    // Mark match as live + freeze the active draft as the live plan
     if (match!.status === 'planning') {
-      dispatch({ type: 'UPDATE_MATCH', match: { ...match!, status: 'live' } });
+      const activeDraft = match!.drafts.find(d => d.id === match!.activeDraftId) ?? match!.drafts[0];
+      dispatch({
+        type: 'UPDATE_MATCH',
+        match: { ...match!, status: 'live', livePlan: structuredClone(activeDraft) },
+      });
     }
   }
 
   function handlePause() {
     setTimer(prev => {
-      const additionalElapsed = prev.startedAt ? Date.now() - prev.startedAt : 0;
+      const additionalElapsed = prev.startedAt ? (Date.now() - prev.startedAt) * speedMultiplier : 0;
       return {
         ...prev,
         isRunning: false,
@@ -163,6 +190,17 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
         startedAt: null,
       };
     });
+  }
+
+  function handleSpeedChange(newSpeed: number) {
+    if (newSpeed === speedMultiplier) return;
+    // Snapshot current simulated elapsed so speed changes are seamless
+    if (timer.isRunning && timer.startedAt !== null) {
+      const now = Date.now();
+      const snapshot = timer.elapsedBeforePause + (now - timer.startedAt) * speedMultiplier;
+      setTimer(prev => ({ ...prev, elapsedBeforePause: snapshot, startedAt: now }));
+    }
+    setSpeedMultiplier(newSpeed);
   }
 
   function handleNextHalf() {
@@ -189,7 +227,73 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
         <span className="text-sm text-gray-500 font-medium">
           {timer.halfIndex === 0 ? '1. omgang' : '2. omgang'}
         </span>
-        <div className="w-8" />
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5" title="Demo-fart for testing">
+          {[1, 10, 60].map(s => (
+            <button key={s} onClick={() => handleSpeedChange(s)}
+              className={`text-xs font-semibold px-2 py-1 rounded-md transition-colors ${
+                speedMultiplier === s ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              {s}×
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Next substitution panel */}
+      <div className={`mb-4 rounded-2xl border-2 transition-all ${
+        isSubImminent
+          ? 'bg-orange-50 border-orange-400 shadow-lg animate-pulse'
+          : nextPeriod
+            ? 'bg-white border-gray-200'
+            : 'bg-gray-50 border-gray-200'
+      }`}>
+        <div className="px-4 py-3 border-b border-inherit flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wide text-gray-600">
+            Neste bytte
+          </span>
+          {nextPeriod && nextSubMin !== null && nextSubSec !== null && (
+            <span className={`font-mono font-bold text-lg tabular-nums ${isSubImminent ? 'text-orange-600' : 'text-gray-700'}`}>
+              {String(nextSubMin).padStart(2, '0')}:{String(nextSubSec).padStart(2, '0')}
+            </span>
+          )}
+        </div>
+        {!nextPeriod ? (
+          <p className="px-4 py-5 text-center text-sm text-gray-500">
+            Ingen flere bytter i denne omgangen
+          </p>
+        ) : upcomingChanges.length === 0 ? (
+          <p className="px-4 py-5 text-center text-sm text-gray-500">
+            Ingen endringer ved neste periode
+          </p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {upcomingChanges.map(c => {
+              const outName = c.outgoing ? playerMap.get(c.outgoing) ?? '?' : null;
+              const inName = c.incoming ? playerMap.get(c.incoming) ?? '?' : null;
+              return (
+                <div key={c.position} className="px-4 py-2.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                    {c.position}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-red-600 text-base leading-none shrink-0" aria-label="ut">↓</span>
+                      <span className={`text-sm truncate ${outName ? 'text-red-700 font-medium' : 'text-gray-300'}`}>
+                        {outName ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-green-600 text-base leading-none shrink-0" aria-label="inn">↑</span>
+                      <span className={`text-sm truncate ${inName ? 'text-green-800 font-semibold' : 'text-gray-300'}`}>
+                        {inName ?? '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Big Timer Display */}
@@ -295,7 +399,7 @@ export function MatchTimerScreen({ matchId, onBack }: Props) {
       <div className="bg-white rounded-xl border border-gray-200 p-3">
         <h3 className="text-xs font-semibold text-gray-500 mb-2">TOTAL SPILLETID</h3>
         <div className="grid grid-cols-2 gap-1">
-          {[...calculatePlayingTime(match).entries()]
+          {[...calculatePlayingTime(plan).entries()]
             .sort((a, b) => b[1] - a[1])
             .map(([pid, mins]) => (
               <div key={pid} className="flex justify-between text-xs py-1 px-2">

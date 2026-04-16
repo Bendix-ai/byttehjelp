@@ -61,10 +61,10 @@ export function getSubstitutionDiff(
   };
 }
 
-export function calculatePlayingTime(match: Match): Map<string, number> {
+export function calculatePlayingTime(plan: { halves: Match['drafts'][number]['halves'] }): Map<string, number> {
   const minutes = new Map<string, number>();
 
-  for (const half of match.halves) {
+  for (const half of plan.halves) {
     for (const period of half.periods) {
       const duration = period.endMinute - period.startMinute;
       for (const playerId of Object.values(period.positions)) {

@@ -2,9 +2,15 @@
 
 @theme {
   --color-sub-out: #F4CCCC;
+  --color-sub-out-ink: #8a1f1f;
   --color-sub-in: #D9EAD3;
+  --color-sub-in-ink: #1f6b32;
   --color-primary: #1e40af;
   --color-primary-light: #3b82f6;
+  --color-primary-soft: #e8edff;
+  --color-keeper: #fde68a;
+  --color-keeper-ink: #92400e;
+  --color-surface: #f7f8fa;
 }
 
 html, body, #root {
@@ -17,6 +23,13 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Print: hide app chrome, show print view, preserve colors */
+@media print {
+  body { background: white !important; }
+  .print-hide { display: none !important; }
+  * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
 }
 
 /* Safe area for iPhone notch/home indicator */

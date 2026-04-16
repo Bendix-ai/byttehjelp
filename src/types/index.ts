@@ -1,8 +1,11 @@
 export type PlayFormat = '5v5' | '7v7' | '9v9';
 
+export type PlayerRole = 'keeper' | 'forsvar' | 'midtbane' | 'angrep';
+
 export interface Player {
   id: string;
   name: string;
+  roles?: PlayerRole[];
 }
 
 export interface Formation {
@@ -37,19 +40,32 @@ export interface Half {
 
 export type MatchStatus = 'planning' | 'live' | 'completed';
 
+export interface Draft {
+  id: string;
+  name: string;
+  formationId: string;
+  availablePlayerIds: string[];
+  halves: [Half, Half];
+  intervalMinutes: number;
+  halfDurationMinutes: number;
+  keeperLocked: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Match {
   id: string;
   teamId: string;
   opponentName: string;
   date: string;
+  kickoffTime?: string;
+  venue?: string;
   format: PlayFormat;
-  formationId: string;
-  availablePlayerIds: string[];
-  halves: [Half, Half];
+  drafts: Draft[];
+  activeDraftId: string;
+  livePlan?: Draft;
   status: MatchStatus;
-  intervalMinutes: number;
-  halfDurationMinutes: number;
-  keeperLocked: boolean;
+  result?: { home: number; away: number };
   createdAt: number;
 }
 

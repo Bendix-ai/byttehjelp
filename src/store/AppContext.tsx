@@ -1,15 +1,57 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from 'react';
-import type { AppData, Match, Team } from '../types';
+import type { AppData, Draft, Match, Team } from '../types';
+import { generateId } from '../utils/id';
 
 const STORAGE_KEY = 'byttehjelp';
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
+
+type LegacyMatchV1 = Omit<Match, 'drafts' | 'activeDraftId' | 'livePlan'> & {
+  formationId: string;
+  availablePlayerIds: string[];
+  halves: Draft['halves'];
+  intervalMinutes: number;
+  halfDurationMinutes: number;
+  keeperLocked: boolean;
+};
+
+function migrateV1ToV2(old: { teams?: Team[]; matches?: LegacyMatchV1[] }): AppData {
+  const matches: Match[] = (old.matches ?? []).map(m => {
+    const draftId = generateId();
+    const draft: Draft = {
+      id: draftId,
+      name: 'Hovedutkast',
+      formationId: m.formationId,
+      availablePlayerIds: m.availablePlayerIds,
+      halves: m.halves,
+      intervalMinutes: m.intervalMinutes,
+      halfDurationMinutes: m.halfDurationMinutes,
+      keeperLocked: m.keeperLocked,
+      createdAt: m.createdAt,
+      updatedAt: m.createdAt,
+    };
+    return {
+      id: m.id,
+      teamId: m.teamId,
+      opponentName: m.opponentName,
+      date: m.date,
+      format: m.format,
+      drafts: [draft],
+      activeDraftId: draftId,
+      livePlan: m.status !== 'planning' ? draft : undefined,
+      status: m.status,
+      createdAt: m.createdAt,
+    };
+  });
+  return { teams: old.teams ?? [], matches, version: 2 };
+}
 
 function loadFromStorage(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const data = JSON.parse(raw) as AppData;
-      if (data.version === CURRENT_VERSION) return data;
+      const data = JSON.parse(raw);
+      if (data.version === CURRENT_VERSION) return data as AppData;
+      if (data.version === 1 || data.version === undefined) return migrateV1ToV2(data);
     }
   } catch { /* ignore */ }
   return { teams: [], matches: [], version: CURRENT_VERSION };

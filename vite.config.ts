@@ -9,6 +9,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: { enabled: false },
       includeAssets: ['icon-192.png', 'icon-512.png', 'alert.mp3'],
       manifest: {
         name: 'Byttehjelp',
