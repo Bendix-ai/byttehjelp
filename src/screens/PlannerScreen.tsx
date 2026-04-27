@@ -75,6 +75,8 @@ export function PlannerScreen({ matchId, onStartMatch, onGoToMatches }: Props) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [intervalMin, setIntervalMin] = useState(displayPlan?.intervalMinutes ?? 7.5);
   const [halfDuration, setHalfDuration] = useState(displayPlan?.halfDurationMinutes ?? 30);
   const [keeperLocked, setKeeperLocked] = useState(displayPlan?.keeperLocked ?? true);
@@ -281,9 +283,21 @@ export function PlannerScreen({ matchId, onStartMatch, onGoToMatches }: Props) {
     setPendingDraftDelete(null);
   }
 
-  function handlePrint() {
+  async function handleDownloadPdf() {
+    if (!team || !match || !displayPlan || !formation || exporting) return;
     setShowShareMenu(false);
-    window.print();
+    setExportError(null);
+    setExporting(true);
+    try {
+      const { downloadMatchPdf } = await import('../utils/exportPdf');
+      await downloadMatchPdf({ team, match, draft: displayPlan, formation, playerMap });
+    } catch (err) {
+      console.error('PDF-eksport feilet', err);
+      setExportError('Kunne ikke generere PDF. Prøv igjen.');
+      setTimeout(() => setExportError(null), 4000);
+    } finally {
+      setExporting(false);
+    }
   }
 
   function handleCopyText() {
@@ -385,20 +399,32 @@ export function PlannerScreen({ matchId, onStartMatch, onGoToMatches }: Props) {
           <div className="flex items-center gap-2 relative shrink-0">
             <div className="relative">
               <button onClick={() => setShowShareMenu(!showShareMenu)}
-                className="bg-white border border-gray-300 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-50">
-                {copied ? '✓ Kopiert!' : 'Del / Eksporter'}
+                disabled={exporting}
+                aria-label="Del eller eksporter kampplan"
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-3 rounded-xl font-semibold hover:bg-gray-50 disabled:opacity-60 disabled:cursor-wait">
+                {exporting ? 'Genererer PDF…' : exportError ? 'Prøv igjen' : copied ? 'Kopiert' : 'Del / Eksporter'}
               </button>
-              {showShareMenu && (
-                <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl border border-gray-200 shadow-lg z-10">
-                  <button onClick={handlePrint}
-                    className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-t-xl border-b border-gray-100">
-                    Skriv ut / Lagre som PDF
+              {showShareMenu && !exporting && (
+                <div className="absolute right-0 mt-1 w-60 bg-white rounded-xl border border-gray-200 shadow-lg z-10 overflow-hidden">
+                  <button onClick={handleDownloadPdf}
+                    className="w-full text-left px-4 py-3 text-sm font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)] border-b border-gray-100 flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0" aria-hidden="true">
+                      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/>
+                    </svg>
+                    <span className="flex-1">Last ned PDF</span>
                   </button>
                   <button onClick={handleCopyText}
-                    className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-b-xl">
-                    Kopier tekstoppsummering
+                    className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0" aria-hidden="true">
+                      <rect x="9" y="9" width="11" height="11" rx="2"/>
+                      <path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+                    </svg>
+                    <span className="flex-1">Kopier som tekst</span>
                   </button>
                 </div>
+              )}
+              {exportError && (
+                <p className="absolute right-0 top-full mt-1 text-xs text-red-600" role="alert">{exportError}</p>
               )}
             </div>
             <button onClick={onStartMatch}
