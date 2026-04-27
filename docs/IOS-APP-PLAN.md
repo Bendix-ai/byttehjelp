@@ -5,6 +5,8 @@
 
 Webappen (byttehjelp.no) forblir flaggskipet for **planlegging** og PDF-eksport. iOS-appen er for **gjennomføring** på sidelinjen.
 
+> **KronerKamp/Mynt-arv:** Bjarne har en moden iOS-stack i `~/Claude/Utviklingsprosjekter/KronerKamp` som er ~98 % klar for TestFlight. Vi gjenbruker patterns og infrastruktur derfra: XcodeGen-oppsett, `KeychainStore`, `WidgetStore` (App Group + UserDefaults + fil-fallback), `SeedData`, `@MainActor @Observable` DI-container, lokaliserings-pipeline, Apple Team-ID `2LDD6W7DC5`.
+
 ---
 
 ## 1. Strategi
@@ -16,66 +18,78 @@ Webappen (byttehjelp.no) forblir flaggskipet for **planlegging** og PDF-eksport.
 - **Push-varsler** med haptics og kritiske lyder fungerer mye bedre native.
 - **App Store-tilstedeværelse** = oppdagbarhet for trenere som ikke kjenner webappen.
 
-### Tech-stack
-- **SwiftUI** (iOS 17+ for Interactive Widgets, iOS 18+ for Live Activities-forbedringer)
-- **ActivityKit** for Live Activity
-- **WidgetKit** for Home/Lock Screen-widgets
-- **WatchKit + SwiftUI** for Apple Watch
-- **Combine + async/await** for state-håndtering
-- **CloudKit** for synk mellom enheter (iPad + iPhone + Watch)
-- **StoreKit 2** for evt. premium-features
+### Tech-stack (samme som KronerKamp/Mynt)
+- **Xcode 26+, Swift 6.0**, iOS 17.0 minimum
+- **XcodeGen** (`brew install xcodegen`) → genererer `.xcodeproj` fra `project.yml`. `.xcodeproj` er gitignored
+- **SwiftUI** + **SwiftData** (modeller som `@Model`)
+- **CloudKit** via `NSPersistentCloudKitContainer` + `iCloud.no.bjarne.byttehjelpen`
+- **App Group**: `group.no.bjarne.byttehjelpen` (delt mellom app + widget extension)
+- **ActivityKit** for Live Activity (`NSSupportsLiveActivities: true` i Info.plist)
+- **WidgetKit** for Home/Lock Screen
+- **WatchKit + SwiftUI** for Apple Watch (legges til i v1.1)
+- **Swift Testing-framework** (`swift test` → forventer alle grønne)
+- **Lokalisering** via `Localizable.xcstrings`, `defaultLocalization: "nb"`
 
 ### Datamodell-paritet med web
-Webappens `Team`/`Match`/`Draft`/`Period`-modell porteres til Swift `struct` med Codable. Backend-fri i versjon 1 (lokal lagring + CloudKit-synk). Versjon 2 vurderer Supabase eller egen API.
+Webappens `Team`/`Match`/`Draft`/`Period`-modell porteres til SwiftData `@Model`-entiteter med Sendable Snapshot-typer for å krysse aktørgrenser (samme pattern som KronerKamp). Repositories som `@ModelActor`. v1 = lokal SwiftData; v1.2 aktiverer CloudKit-synk via Apple-ID.
 
 ---
 
-## 2. Arkitektur
+## 2. Arkitektur (speiler KronerKamp)
 
 ```
-ByttehjelpenApp/                        # main iOS-app target
-├── App/
-│   ├── ByttehjelpenApp.swift           # @main
-│   ├── AppState.swift                  # @Observable global state
-│   └── Persistence.swift               # FileManager + CloudKit
-├── Models/
-│   ├── Team.swift, Player.swift
-│   ├── Match.swift, Draft.swift, Period.swift
-│   └── Formation.swift
-├── Features/
-│   ├── Onboarding/                     # 3 steg
-│   ├── Matches/                        # liste + opprett
-│   ├── Planner/                        # mobil-planlegger
-│   ├── LiveMatch/                      # KRITISK — countdown + bytter
-│   ├── PostMatch/                      # spilletid-fasit
-│   └── Settings/
-├── Shared/
-│   ├── Tokens.swift                    # farger + typografi
-│   ├── Pitch.swift                     # SVG-bane som SwiftUI Canvas
-│   ├── Buttons.swift, Cards.swift
-│   └── Haptics.swift
-├── Services/
-│   ├── TimerService.swift              # presise nedtellinger
-│   ├── NotificationService.swift
-│   └── ExportService.swift             # PDF (PDFKit)
-
-ByttehjelpenWidgets/                    # widget-extension target
-├── ByttehjelpenWidgets.swift           # @main
-├── Live/LiveMatchActivity.swift        # ActivityAttributes + LiveActivity
-├── Home/SmallWidget.swift, MediumWidget.swift, LargeWidget.swift
-├── Lock/InlineComplication.swift, CircleComplication.swift, RectComplication.swift
-└── Shared/                             # gjenbrukt fra hovedapp via embedded framework
-
-ByttehjelpenWatch/                      # watchOS-app target
-├── ByttehjelpenWatchApp.swift
-├── WatchLiveMatch.swift                # speiler iPhone live-match
-└── Complications/
-
-ByttehjelpenKit/                        # delt Swift-pakke
-├── Sources/Models/
-├── Sources/Tokens/
-└── Sources/PlanLogic/                  # buildHalf, computeBench, calculatePlayingTime
+byttehjelp/                             # eksisterende web-prosjekt
+├── src/                                # web-app (uendret)
+├── docs/                               # IOS-APP-PLAN.md, SWOT.md
+├── landing/                            # statisk side: index, personvern, support
+└── ios/                                # ↓ NY iOS-mappe
+    ├── project.yml                     # XcodeGen-konfig (kilde)
+    ├── ByttehjelpenKit/                # Swift Package (delt kode)
+    │   ├── Package.swift               # iOS 17, macOS 14, Swift 6, defaultLocalization "nb"
+    │   ├── Sources/ByttehjelpenKit/
+    │   │   ├── Models/                 # Team, Player, Match, Draft, Period, Formation (@Model)
+    │   │   ├── Repositories/           # TeamRepository, MatchRepository (@ModelActor)
+    │   │   ├── Services/               # TimerService, PlanLogic, NotificationService
+    │   │   ├── Theme/                  # BHColors, BHFonts, Tokens (mirror tokens.jsx)
+    │   │   ├── Persistence/            # ByttehjelpenStore (ModelContainer + App Group)
+    │   │   ├── Widget/                 # WidgetSnapshot, WidgetStore (UserDefaults+fil-fallback)
+    │   │   ├── LiveActivity/           # ByttehjelpenActivityAttributes
+    │   │   ├── Sync/                   # CloudKit-config (klar v1.2)
+    │   │   └── Seed/                   # SeedData (Lyn G09 demo-lag)
+    │   └── Tests/ByttehjelpenKitTests/
+    ├── App/                            # iPhone-app target
+    │   ├── ByttehjelpenApp.swift       # @main
+    │   ├── Info.plist
+    │   ├── Byttehjelpen.entitlements   # iCloud + App Group
+    │   ├── Resources/
+    │   │   ├── Assets.xcassets         # AppIcon, farger, banekart-SVG
+    │   │   └── Localizable.xcstrings   # nb (en kommer i v1.1)
+    │   ├── Session/                    # KeychainStore (kopier fra KronerKamp)
+    │   ├── Features/
+    │   │   ├── Onboarding/             # 3 skjermer
+    │   │   ├── Matches/                # liste + opprett
+    │   │   ├── Planner/                # mobil-planlegger
+    │   │   ├── LiveMatch/              # KRITISK
+    │   │   ├── PostMatch/              # spilletid-fasit
+    │   │   └── Settings/
+    │   └── Preview Content/
+    └── Widget/                         # widget-extension target
+        ├── ByttehjelpenWidget.swift    # @main
+        ├── Info.plist
+        ├── Byttehjelpen.entitlements   # samme App Group
+        ├── Live/LiveMatchActivity.swift     # Dynamic Island + Lock Screen
+        ├── Home/{Small,Medium,Large}.swift  # 3 home-widgets
+        └── Lock/{Inline,Circle,Rect}.swift  # 3 lock-komplikasjoner
 ```
+
+**Bundle-IDs (forhold til KronerKamp):**
+- App: `no.bjarne.byttehjelpen`
+- Widget: `no.bjarne.byttehjelpen.widget`
+- iCloud container: `iCloud.no.bjarne.byttehjelpen`
+- App Group: `group.no.bjarne.byttehjelpen`
+- Watch (v1.1): `no.bjarne.byttehjelpen.watch`
+
+**Apple Team:** `2LDD6W7DC5` (samme som KronerKamp)
 
 ---
 
@@ -119,12 +133,19 @@ ByttehjelpenKit/                        # delt Swift-pakke
 
 ## 4. Veikart — uker
 
-**Uke 1–2: Setup**
-- Xcode-prosjekt med ovenstående target-struktur
-- Swift Package `ByttehjelpenKit` med modeller portert fra TS
-- Tokens.swift med palett/typografi/spacing fra design-bundlen
-- Pitch.swift med SwiftUI Canvas-implementasjon
-- Apple Developer Program-medlemsskap ($99/år) — start NÅ siden DUNS-verifisering tar tid
+**Uke 1: Bootstrap**
+- Kopier KronerKamp-`project.yml` som mal, tilpass navn/bundle-IDs
+- Scaffold `ios/ByttehjelpenKit/` (Package.swift + folder-struktur)
+- Kopier inn `KeychainStore`, `WidgetStore`, `SeedData`-mønsteret
+- Port `tokens.jsx` → `BHColors.swift` + `BHFonts.swift`
+- Port web-modellene (`Team`, `Player`, `Match`, `Draft`, `Period`, `Formation`) til `@Model`
+- `swift test` gir minst en grønn test (sanity check)
+- `xcodegen generate` → bygger på første forsøk i Xcode 26+
+
+**Uke 2: Pitch + tokens**
+- `BHPitch.swift` (SwiftUI Canvas) — port `pitch.jsx`-koordinater (5v5/7v7/9v9-formasjoner)
+- Plan-logikk: port `buildHalf`, `computeBench`, `calculatePlayingTime` fra TS til Swift
+- 5–10 nye tester på plan-logikken
 
 **Uke 3–4: Core flows**
 - Onboarding (3 skjermer)
@@ -193,18 +214,21 @@ Total: ~13 uker (3 mnd) til App Store-submit.
 ## 5. App Store Connect-sjekkliste
 
 ### Konto og avtaler
-- [ ] Apple Developer Program-medlemsskap aktivert
-- [ ] D-U-N-S-nummer for organisasjon (hvis bedrift) — gratis fra Dun & Bradstreet, tar 1–2 uker
-- [ ] Banking-info for evt. betalt-app eller IAP
+- [x] Apple Developer Program (Bjarne har personlig konto)
+- [x] Apple Team-ID: `2LDD6W7DC5` (samme som KronerKamp)
+- [ ] Banking-info for evt. betalt-app eller IAP (gratis-app trenger ikke)
 - [ ] Tax-info utfylt
-- [ ] Terms og Privacy Policy publisert (på byttehjelp.no/personvern)
+- [ ] Personvernerklæring publisert på byttehjelp.no/personvern (kopier mal fra KronerKamp/`landing/personvern.html`)
+- [ ] Support-side på byttehjelp.no/support
 
 ### App-opprettelse
-- [ ] Bundle ID `no.byttehjelpen.app` registrert
+- [ ] Bundle ID `no.bjarne.byttehjelpen` reservert på developer.apple.com (Identifiers → +)
+- [ ] iCloud Container `iCloud.no.bjarne.byttehjelpen` opprettet
+- [ ] App Group `group.no.bjarne.byttehjelpen` opprettet
 - [ ] App Store Connect-record opprettet
 - [ ] Kategori: **Sports** (primary), **Productivity** (secondary)
 - [ ] Aldersgrense: 4+ (ingen problematisk innhold)
-- [ ] Pris: **Gratis** (vurder Premium IAP senere)
+- [ ] Pris: **Gratis** (vurder Premium IAP i v2)
 
 ### Metadata
 - [ ] Norsk og engelsk app-navn, undertittel, beskrivelse
@@ -251,9 +275,9 @@ Kontakt: bendixbjarne@gmail.com
 
 ## 6. Tekniske avgjørelser
 
-### Persistens
-**Versjon 1:** lokal `FileManager` med JSON i Application Support. Lite, raskt, ingen avhengighet.
-**Versjon 1.2:** CloudKit-synk via `NSPersistentCloudKitContainer` — eller manuell synk om Core Data føles tungt.
+### Persistens (samme som KronerKamp)
+**v1:** SwiftData `@Model` + `ModelContainer` via App Group `group.no.bjarne.byttehjelpen`. CloudKit-config klar men deaktivert (eksakt KronerKamp-pattern).
+**v1.2:** Aktiver CloudKit `.private(iCloud.no.bjarne.byttehjelpen)` når modellen er stabil. Sendable Snapshots holder allerede aktørgrenser rene.
 
 ### Timer-presisjon
 `Timer.publish` i Combine kan drive med ~10ms over lange perioder. Bruk `mach_absolute_time` eller `Date.timeIntervalSince` for presisjon, og oppdater UI hver 200ms (5 ganger per sekund er nok for en MM:SS-display).
@@ -327,9 +351,9 @@ Premium-modell etter v1 (ikke i scope nå): $2.99/mnd × 100 trenere = ~$300/mnd
 
 ## 10. Hva Bjarne må gjøre nå
 
-1. **Apple Developer Program-tilmelding** (990 kr) — flaskehals, gjør i dag
-2. **Bestem juridisk enhet:** privatperson eller firma. Firma trenger D-U-N-S
-3. **Reserver bundle-ID** `no.byttehjelpen.app` så snart Developer-konto er aktiv
-4. **Kjøp domene-aliaser:** byttehjelpen.no, byttehjelpen.app (om ikke allerede)
-5. **Sett opp en TestFlight-pilotgruppe** av 5–10 lag-trenere du kjenner
-6. **Beslutt:** lager du selv (Swift) eller hyrer du inn? Anbefaling: prøv selv på en sprint, vurder å hyre etter 2 uker hvis fremdrift føles for treg
+1. **Reserver bundle-ID** `no.bjarne.byttehjelpen` på developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → + (5 min jobb). Ikke via Vercel — Vercel håndterer kun web.
+2. **Opprett iCloud Container** `iCloud.no.bjarne.byttehjelpen` samme sted (forberedelse for v1.2-synk).
+3. **Opprett App Group** `group.no.bjarne.byttehjelpen` (kreves av widget-target fra dag én).
+4. **Sett opp App Store Connect-record** — nytt App-record med bundle-ID over.
+5. **Bootstrap `ios/`-folderen** — Claude kan scaffolde den med XcodeGen-mal, modeller, tokens og en kjørbar Live Match-skjerm. Ber jeg om dette når du er klar.
+6. **TestFlight-pilotgruppe**: 5–10 trenere fra G09/G07/J11-årgangene du kjenner.
