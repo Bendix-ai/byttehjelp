@@ -27,3 +27,12 @@ dist-ssr
 # Local scratch dirs from MCP tools
 .webdesign-mcp
 .playwright-mcp
+
+# Xcode (genereres av xcodegen)
+ios/*.xcodeproj
+ios/**/.DS_Store
+ios/**/xcuserdata/
+ios/**/.build/
+ios/**/.swiftpm/
+ios/build/
+ios/DerivedData/
